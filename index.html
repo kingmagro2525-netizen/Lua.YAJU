@@ -143,13 +143,22 @@
         background-color: var(--primary);
         transition: width 0.1s;
     }
+    .warning {
+        background: rgba(255, 152, 0, 0.1);
+        border-left: 4px solid #ff9800;
+        padding: 12px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-size: 0.9em;
+        color: #ffb74d;
+    }
 </style>
 </head>
 <body>
 
 <div class="container">
     <h1>luaコード難読化サイト by YAJU</h1>
-    <p class="desc">いろいろなオプションが無料</p>
+    <p class="desc">いろいろなオプションが無料 - 最大50層対応</p>
     
     <div class="control-group">
         <label>1. luaコード入力</label>
@@ -163,10 +172,13 @@
 
     <div class="options">
         <div class="control-group">
-            <label>Base64</label>
-            <input type="range" id="b64Layers" min="1" max="12" value="5" oninput="document.getElementById('layerVal').innerText = this.value">
+            <label>Base64暗号化層数</label>
+            <input type="range" id="b64Layers" min="1" max="50" value="5" oninput="updateLayerDisplay()">
             <div style="text-align: right; font-size: 0.9em;">現在の設定: <span id="layerVal" style="color:var(--primary); font-weight:bold;">5</span> 層</div>
-            <small style="color:#888;">※数を増やすとファイルサイズとロード時間が増加します。</small>
+            <div id="layerWarning" class="warning" style="display:none;">
+                ⚠️ 警告: 30層以上は処理に時間がかかり、ファイルサイズが非常に大きくなります。
+            </div>
+            <small style="color:#888;">※推奨: 5-15層 | 最大: 50層</small>
         </div>
         <div class="control-group">
             <label>ダミーコード</label>
@@ -177,7 +189,7 @@
     
     <div class="control-group">
         <label>高度なオプション</label>
-        <label class="checkbox-label"><input type="checkbox" id="chkXor" checked> XOR</label>
+        <label class="checkbox-label"><input type="checkbox" id="chkXor" checked> XOR暗号化</label>
         <label class="checkbox-label"><input type="checkbox" id="chkShuffle" checked>シャッフル</label>
         <label class="checkbox-label"><input type="checkbox" id="chkFlat" checked> 制御フローの平坦化</label>
     </div>
@@ -198,6 +210,12 @@
 
 <script>
     const byId = (id) => document.getElementById(id);
+
+    function updateLayerDisplay() {
+        const layers = parseInt(byId('b64Layers').value);
+        byId('layerVal').innerText = layers;
+        byId('layerWarning').style.display = layers >= 30 ? 'block' : 'none';
+    }
 
     byId('btnObfuscate').addEventListener('click', async () => {
         await startObfuscation();
@@ -277,6 +295,13 @@
         const input = byId('inputCode').value;
         if (!input.trim()) { setStatus("エラー: コードが入力されていません。", "error"); return; }
 
+        const layers = parseInt(byId('b64Layers').value);
+        if (layers > 30 && input.length > 5000) {
+            if (!confirm('警告: ファイルサイズが大きいため処理落ちしてしまう可能性があります、続行しますか？')) {
+                return;
+            }
+        }
+
         const btn = byId('btnObfuscate');
         btn.disabled = true;
         updateProgress(0);
@@ -285,7 +310,7 @@
         try {
             await sleep(50);
             const config = {
-                layers: parseInt(byId('b64Layers').value),
+                layers: layers,
                 junk: parseInt(byId('junkIntensity').value),
                 useXor: byId('chkXor').checked,
                 useShuffle: byId('chkShuffle').checked,
@@ -294,7 +319,8 @@
 
             const result = await processHeavyTask(input, config);
             byId('outputCode').value = result;
-            setStatus("難読化が完了しました！コピーして使用してください。", "success");
+            const finalSize = (result.length / 1024).toFixed(2);
+            setStatus(`難読化が完了しました！(${finalSize} KB) コピーして使用してください。`, "success");
             updateProgress(100);
 
         } catch (e) {
@@ -342,7 +368,12 @@
                 for(let k=0; k<currentPayload.length; k++) u8[k] = currentPayload.charCodeAt(k);
                 currentPayload = bytesToBase64(u8);
             }
-            if (currentPayload.length > 50000) await sleep(10);
+            
+            if (i % 5 === 0) await sleep(20);
+            
+            if (currentPayload.length > 10000000) {
+                setStatus(`警告: データサイズが大きくなっています (${(currentPayload.length/1024/1024).toFixed(2)} MB)`, "process");
+            }
         }
 
         setStatus("Luaローダー生成中...", "process");
@@ -378,7 +409,7 @@ local ${V.lib} = (function()
     end
 end)()`;
 
-        let script = `-- [[ Obfuscated by YAJU ]] --\n`;
+        let script = `-- [[ Obfuscated by YAJU - ${config.layers} layers ]] --\n`;
         script += fastBase64Decoder + "\n";
 
         let finalPayloadCode = "";
@@ -462,7 +493,7 @@ end`;
         }
 
         if (config.junk > 0) {
-            script = script.replace("-- [[ Obfuscated by YAJU ]] --", `-- [[ Obfuscated by YAJU ]] --\n-- ${randomString(50)}`);
+            script = script.replace(`-- [[ Obfuscated by YAJU - ${config.layers} layers ]] --`, `-- [[ Obfuscated by YAJU - ${config.layers} layers ]] --\n-- ${randomString(50)}`);
         }
         
         return script;
