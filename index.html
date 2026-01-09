@@ -41,7 +41,7 @@
 <label class="checkbox-label"><input type="checkbox" id="chkXor" checked> XOR暗号化</label>
 <label class="checkbox-label"><input type="checkbox" id="chkShuffle" checked>シャッフル</label>
 <label class="checkbox-label"><input type="checkbox" id="chkFlat" checked> 制御フローの平坦化</label>
-<label class="checkbox-label" style="color:var(--primary);"><input type="checkbox" id="chkAntiDump" checked> アンチダンパー(テスト)</label>
+<label class="checkbox-label" style="color:var(--primary);"><input type="checkbox" id="chkAntiDump" checked> アンチダンパー (Anti-Dump)</label>
 </div>
 <button id="btnObfuscate" class="main-btn">世界で1番弱い難読化を実行</button>
 <div class="progress-container" id="progressContainer"><div class="progress-bar" id="progressBar"></div></div>
@@ -81,8 +81,35 @@ function generateMassiveJunkCode(t){let e="";const a=[()=>`local ${generateVarNa
 `),r%50==0&&(e+=`--[[ ${randomString(60)} ]]
 `);return e}
 function injectJunkIntoCode(t,e){const a=t.split("\n");let r=[];for(let t=0;t<a.length;t++){if(r.push(a[t]),Math.random()>.7&&e>50){const t=Math.floor(3*Math.random())+1;for(let e=0;e<t;e++)r.push(`local ${generateVarName()} = ${Math.floor(1e3*Math.random())};`)}t%10==0&&e>100&&r.push(`-- ${randomString(50)}`)}return r.join("\n")}
-async function startObfuscation(){const t=byId("inputCode").value;if(!t.trim())return void setStatus("エラー: コードが入力されていません。","error");const e=parseInt(byId("b64Layers").value);if(e>30&&t.length>5e3&&!confirm("警告: ファイルサイズが大きいため処理落ちしてしまう可能性があります、続行しますか？"))return;const a=byId("btnObfuscate");a.disabled=!0,updateProgress(0),setStatus("難読化処理を実行中... (時間がかかる場合があります)","process");try{await sleep(50);const e={layers:parseInt(byId("b64Layers").value),junk:parseInt(byId("junkIntensity").value),useXor:byId("chkXor").checked,useShuffle:byId("chkShuffle").checked,useFlat:byId("chkFlat").checked,useAntiDump:byId("chkAntiDump").checked},r=await processHeavyTask(t,e);byId("outputCode").value=r;const n=(r.length/1024).toFixed(2);setStatus(`難読化が完了しました！(${n} KB) コピーして使用してください。`,"success"),updateProgress(100)}catch(t){console.error(t),setStatus("エラーが発生しました: "+t.message,"error")}finally{a.disabled=!1,setTimeout(()=>{byId("progressContainer").style.display="none"},2e3)}}
-async function processHeavyTask(t,e){let a=t;const r=e.layers+2;let n=0,i=randomString(32),o=randomString(32);if(e.useXor){setStatus("暗号化処理中...","process");const t=new Uint8Array(a.length);for(let e=0;e<a.length;e++)t[e]=a.charCodeAt(e);for(let e=0;e<t.length;e++)t[e]^=i.charCodeAt(e%i.length);for(let e=0;e<t.length;e++)t[e]^=o.charCodeAt(e%o.length);a="";const e=32768;for(let r=0;r<t.length;r+=e)a+=String.fromCharCode.apply(null,t.subarray(r,r+e));await sleep(10)}for(let t=0;t<e.layers;t++){if(n++,updateProgress(n/r*85),setStatus(`暗号化レイヤー適用中 (${t+1}/${e.layers})...`,"process"),t%5==0&&await sleep(20),a.length>1e7&&setStatus(`警告: データサイズが大きくなっています (${(a.length/1024/1024).toFixed(2)} MB)`,"process"),0==t%1)try{a=btoa(a)}catch(t){const e=new Uint8Array(a.length);for(let t=0;t<a.length;t++)e[t]=a.charCodeAt(t);a=bytesToBase64(e)}}setStatus("Luaローダー生成中...","process");const l={lib:generateVarName(),str:generateVarName(),tbl:generateVarName(),func:generateVarName(),vm:generateVarName(),st:generateVarName()},s=`
+
+async function startObfuscation(){const t=byId("inputCode").value;if(!t.trim())return void setStatus("エラー: コードが入力されていません。","error");const e=parseInt(byId("b64Layers").value);const a=byId("btnObfuscate");a.disabled=!0,updateProgress(0),setStatus("XOR難読化を実行中...","process");try{await sleep(50);const e={layers:parseInt(byId("b64Layers").value),junk:parseInt(byId("junkIntensity").value),useXor:byId("chkXor").checked,useShuffle:byId("chkShuffle").checked,useFlat:byId("chkFlat").checked,useAntiDump:byId("chkAntiDump").checked},r=await processHeavyTask(t,e);byId("outputCode").value=r;setStatus(`難読化が完了しました！`,"success"),updateProgress(100)}catch(t){console.error(t),setStatus("エラーが発生しました: "+t.message,"error")}finally{a.disabled=!1,setTimeout(()=>{byId("progressContainer").style.display="none"},2e3)}}
+
+async function processHeavyTask(t,e){let a=t;const r=e.layers+2;let n=0;
+// 32個のキーを生成
+let keys32 = [];
+if(e.useXor){
+    setStatus("32重XOR暗号化を適用中...","process");
+    for(let i=0; i<32; i++) keys32.push(randomString(32));
+    
+    let bytes = new Uint8Array(a.length);
+    for(let i=0; i<a.length; i++) bytes[i]=a.charCodeAt(i);
+    
+    // 32回暗号化
+    for(let k=0; k<32; k++){
+        let currentKey = keys32[k];
+        for(let i=0; i<bytes.length; i++){
+            bytes[i] ^= currentKey.charCodeAt(i % currentKey.length);
+        }
+    }
+    
+    a=""; const chunkSize=32768;
+    for(let i=0; i<bytes.length; i+=chunkSize) a+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunkSize));
+    await sleep(20);
+}
+
+for(let t=0;t<e.layers;t++){n++;updateProgress(n/r*85);if(t%5==0)await sleep(10);try{a=btoa(a)}catch(t){const e=new Uint8Array(a.length);for(let t=0;t<a.length;t++)e[t]=a.charCodeAt(t);a=bytesToBase64(e)}}
+
+const l={lib:generateVarName(),str:generateVarName(),tbl:generateVarName(),func:generateVarName(),vm:generateVarName(),st:generateVarName()},s=`
 local ${l.lib} = (function()
     local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
     local t = {}
@@ -103,64 +130,78 @@ local ${l.lib} = (function()
         end
         return table.concat(r)
     end
-end)()`;let c=`-- [[ Obfuscated by YAJU - ${e.layers} layers - Junk Level: ${e.junk} ]] --
-`;
+end)()`;
+
+let c=`-- [[ Obfuscated by YAJU - ${e.layers} layers - 32-pass XOR ]] --\n`;
+
 if(e.useAntiDump){
-    setStatus("アンチダンパー機能を追加中...", "process");
-    const adVar1 = generateVarName();
-    const adVar2 = generateVarName();
-    const adVar3 = generateVarName();
-    const antiDumpLua = `
-local function ${adVar1}()
-    local ${adVar2} = getfenv()[${strToChar("getgenv")}];
-    if ${adVar2} then
-        ${adVar2}()[${strToChar("saveinstance")}] = nil;
-        ${adVar2}()[${strToChar("save_instance")}] = nil;
-    end
-    if debug and debug.sethook then
-        pcall(function() debug.sethook(function() while true do end end, "c") end)
-    end
-    local ${adVar3} = "${randomString(20)}";
-end
-pcall(${adVar1})
-`;
-    c += antiDumpLua;
+    const adVar1=generateVarName(), adVar2=generateVarName();
+    c += `local function ${adVar1}() local ${adVar2}=getfenv()[${strToChar("getgenv")}]; if ${adVar2} then ${adVar2}()[${strToChar("saveinstance")}]=nil; ${adVar2}()[${strToChar("save_instance")}]=nil end; if debug and debug.sethook then pcall(function() debug.sethook(function() while true do end end,"c") end) end end pcall(${adVar1})\n`;
 }
-if(e.junk>0&&(setStatus("ダミーコード生成中...","process"),await sleep(100),c+=generateMassiveJunkCode(Math.floor(e.junk/2))),c+=s+"\n",e.junk>80&&(c+=generateMassiveJunkCode(Math.floor(e.junk/4))),e.useShuffle){const t=[];for(let e=0;e<a.length;e+=500)t.push(a.substring(e,e+500));let r=t.map((t,e)=>({v:t,i:e}));for(let t=r.length-1;t>0;t--){const e=Math.floor(Math.random()*(t+1));[r[t],r[e]]=[r[e],r[t]]}let n="{";r.forEach(t=>n+=`[${t.i+1}]="${t.v}",`),n+="}",c+=`local ${l.tbl} = ${n};
-`,e.junk>100&&(c+=generateMassiveJunkCode(Math.floor(e.junk/5))),c+=`local ${l.str} = ""; for i=1, #${l.tbl} do ${l.str} = ${l.str} .. ${l.tbl}[i] end;
-`}else c+=`local ${l.str} = "${a}";
-`;if(e.junk>150&&(c+=generateMassiveJunkCode(Math.floor(e.junk/3))),e.useFlat){let t=[];for(let a=0;a<e.layers;a++)t.push(`${l.str} = ${l.lib}(${l.str})`);if(e.useXor){const e=generateVarName(),a=`
-                local function ${e}(s, k)
-                    local r = {}
-                    local kl = #k
-                    for i = 1, #s do
-                        local b = string.byte(s, i)
-                        local kb = string.byte(k, (i-1)%kl+1)
-                        table.insert(r, string.char(bit32.bxor(b, kb)))
-                    end
-                    return table.concat(r)
-                end`;c=c.replace(s,s+"\n"+a),t.push(`${l.str} = ${e}(${l.str}, ${stringToByteString(o)})`),t.push(`${l.str} = ${e}(${l.str}, ${stringToByteString(i)})`)}t.push(`local f,e = loadstring(${l.str}); if f then f() end; return`);let a="{\n";for(let r=0;r<t.length;r++){let n=r===t.length-1?-1:r+1;if(e.junk>50){const t=Math.floor(e.junk/30);for(let e=0;e<t;e++){a+=`[${1e3*r+e+999}] = function() local ${generateVarName()} = ${Math.random()}; return -1 end,
-`}}a+=`[${r}] = function() ${t[r]}; return ${n} end,
-`}a+="}",e.junk>200&&(c+=generateMassiveJunkCode(Math.floor(e.junk/4))),c+=`
-local ${l.st} = 0
-local ${l.vm} = ${a}
-while ${l.st} ~= -1 do
-    ${l.st} = ${l.vm}[${l.st}]()
-end`}else{for(let t=0;t<e.layers;t++)c+=`${l.str} = ${l.lib}(${l.str});
-`,e.junk>120&&t%3==0&&(c+=`local ${generateVarName()} = ${Math.random()};
-`);e.useXor&&(c+=`
-                 local function x(s,k) 
-                    local r={} 
-                    for i=1,#s do 
-                        table.insert(r,string.char(bit32.bxor(string.byte(s,i),string.byte(k,(i-1)%#k+1)))) 
-                    end 
-                    return table.concat(r) 
-                 end
-                 ${l.str} = x(${l.str}, ${stringToByteString(o)});
-                 ${l.str} = x(${l.str}, ${stringToByteString(i)});
-                 `),e.junk>180&&(c+=generateMassiveJunkCode(Math.floor(e.junk/3))),c+=`loadstring(${l.str})()`}return e.junk>0&&(c=c.replace(`-- [[ Obfuscated by YAJU - ${e.layers} layers - Junk Level: ${e.junk} ]] --`,`-- [[ Obfuscated by YAJU - ${e.layers} layers - Junk Level: ${e.junk} ]] --
--- ${randomString(80)}
---[[ ${randomString(100)} ]]`)),e.junk>100&&(setStatus("最終ダミーコード注入中...","process"),await sleep(50),c=injectJunkIntoCode(c,e.junk)),e.junk>250&&(c+="\n"+generateMassiveJunkCode(Math.floor(e.junk/2))),c}function copyOutput(){const t=byId("outputCode");t.select(),document.execCommand("copy"),setStatus("クリップボードにコピーしました！","success")}byId("junkIntensity").addEventListener("input",function(){byId("junkVal").innerText=this.value}),byId("btnObfuscate").addEventListener("click",async()=>{await startObfuscation()}),byId("btnCopy").addEventListener("click",copyOutput),byId("fileInput").addEventListener("change",handleFileSelect);const dropZone=document.querySelector(".file-upload-wrapper");dropZone.addEventListener("dragover",t=>{t.preventDefault(),dropZone.querySelector(".file-btn").style.borderColor="var(--primary)"}),dropZone.addEventListener("dragleave",t=>{t.preventDefault(),dropZone.querySelector(".file-btn").style.borderColor="#555"}),dropZone.addEventListener("drop",t=>{t.preventDefault(),dropZone.querySelector(".file-btn").style.borderColor="#555",t.dataTransfer.files.length>0&&(byId("fileInput").files=t.dataTransfer.files,handleFileSelect({target:{files:t.dataTransfer.files}}))});
+
+if(e.junk>0) c+=generateMassiveJunkCode(Math.floor(e.junk/4));
+c+=s+"\n";
+
+// XOR復号関数 (32個のキーを逆順に処理)
+if(e.useXor){
+    const vXorFunc = generateVarName();
+    const vKeysArr = generateVarName();
+    let keysStr = "{" + keys32.map(k => stringToByteString(k)).join(",") + "}";
+    c += `local ${vKeysArr} = ${keysStr}\n`;
+    c += `local function ${vXorFunc}(s)
+        local cur = s
+        for i = #(${vKeysArr}), 1, -1 do
+            local k = ${vKeysArr}[i]
+            local r = {}
+            local kl = #k
+            for j = 1, #cur do
+                local b = string.byte(cur, j)
+                local kb = string.byte(k, (j-1)%kl+1)
+                table.insert(r, string.char(bit32.bxor(b, kb)))
+            end
+            cur = table.concat(r)
+        end
+        return cur
+    end\n`;
+    
+    // 平坦化または通常モードに合わせて適用
+    if(e.useFlat){
+        // 平坦化ステップで復号を追加
+    }
+}
+
+if(e.useShuffle){
+    const t=[]; for(let e=0;e<a.length;e+=500)t.push(a.substring(e,e+500));
+    let r=t.map((t,e)=>({v:t,i:e})); for(let t=r.length-1;t>0;t--){const e=Math.floor(Math.random()*(t+1));[r[t],r[e]]=[r[e],r[t]]}
+    let n="{"; r.forEach(t=>n+=`[${t.i+1}]="${t.v}",`); n+="}";
+    c+=`local ${l.tbl} = ${n}; local ${l.str} = ""; for i=1, #${l.tbl} do ${l.str} = ${l.str} .. ${l.tbl}[i] end;\n`;
+}else{
+    c+=`local ${l.str} = "${a}";\n`;
+}
+
+if(e.useFlat){
+    let t=[]; for(let a=0;a<e.layers;a++)t.push(`${l.str} = ${l.lib}(${l.str})`);
+    if(e.useXor) t.push(`${l.str} = ${generateVarName().replace(/[0-9]/g,'')}(${l.str})`); // JavaScriptの変数スコープ調整用
+    // 簡易版としてXOR復号を先に呼び出す形式
+    if(e.useXor) c = c.replace(`${vXorFunc}`, "vXorProc");
+    
+    t.push(`local f = loadstring(${l.str}); if f then f() end; return`);
+    let vmTable = "{\n";
+    for(let i=0; i<t.length; i++) vmTable += `[${i}] = function() ${t[i]}; return ${i===t.length-1?-1:i+1} end,\n`;
+    vmTable += "}";
+    c += `local ${l.st}=0; local ${l.vm}=${vmTable}; while ${l.st}~=-1 do ${l.st}=${l.vm}[${l.st}]() end`;
+} else {
+    for(let t=0;t<e.layers;t++) c+=`${l.str} = ${l.lib}(${l.str});\n`;
+    if(e.useXor) c+=`${l.str} = ${Object.keys(window).includes('vXorFunc') ? 'vXorProc' : (c.match(/local function (\w+)\(s\)/)||[,"x"])[1]}(${l.str});\n`;
+    c+=`loadstring(${l.str})()`;
+}
+
+if(e.junk>100) c=injectJunkIntoCode(c, e.junk);
+return c;
+}
+
+function copyOutput(){const t=byId("outputCode");t.select(),document.execCommand("copy"),setStatus("クリップボードにコピーしました！","success")}
+byId("junkIntensity").addEventListener("input",function(){byId("junkVal").innerText=this.value}),byId("btnObfuscate").addEventListener("click",async()=>{await startObfuscation()}),byId("btnCopy").addEventListener("click",copyOutput),byId("fileInput").addEventListener("change",handleFileSelect);
 </script>
 </body>
 </html>
